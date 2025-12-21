@@ -1,5 +1,7 @@
-import { useState } from "react";
-import { Link } from "react-router-dom";
+import { useState, useEffect } from "react";
+import { Link, useNavigate } from "react-router-dom";
+import { useDispatch, useSelector } from "react-redux";
+import { registerUser, clearError } from "../state/authSlice";
 
 function Signup() {
   const [form, setForm] = useState({
@@ -7,32 +9,57 @@ function Signup() {
     email: "",
     password: "",
   });
-  const [error, setError] = useState("");
+  const dispatch = useDispatch();
+  const navigate = useNavigate();
+  const { isLoading, error, isAuthenticated } = useSelector(
+    (state) => state.auth
+  );
   const [success, setSuccess] = useState("");
+
+  useEffect(() => {
+    // Clear any previous errors
+    dispatch(clearError());
+
+    // Redirect if already authenticated
+    if (isAuthenticated) {
+      navigate("/");
+    }
+  }, [isAuthenticated, navigate, dispatch]);
 
   const handleChange = (e) => {
     setForm({
       ...form,
       [e.target.name]: e.target.value,
     });
-    setError("");
-    setSuccess("");
+    if (error) {
+      dispatch(clearError());
+      setSuccess("");
+    }
   };
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
     // Basic validation
     if (!form.username || !form.email || !form.password) {
-      setError("Please fill in all fields.");
       return;
     }
-    // You might want to add more validation here (e.g., password/email strength)
-    setSuccess("Account created for: " + form.username);
-    setForm({
-      username: "",
-      email: "",
-      password: "",
-    });
+
+    try {
+      const result = await dispatch(registerUser(form)).unwrap();
+      setSuccess("Account created successfully! Redirecting to login...");
+      setForm({
+        username: "",
+        email: "",
+        password: "",
+      });
+      // Redirect to login after 2 seconds
+      setTimeout(() => {
+        navigate("/login");
+      }, 2000);
+    } catch (err) {
+      // Error is handled by Redux state
+      setSuccess("");
+    }
   };
 
   return (
@@ -89,11 +116,15 @@ function Signup() {
           </div>
           {error && <div className="text-red-500 text-sm">{error}</div>}
           {success && <div className="text-green-500 text-sm">{success}</div>}
+          {isLoading && (
+            <div className="text-blue-500 text-sm">Creating account...</div>
+          )}
           <button
             type="submit"
-            className="w-full bg-blue-600 text-white py-2 rounded hover:bg-blue-700 font-semibold transition"
+            disabled={isLoading}
+            className="w-full bg-blue-600 text-white py-2 rounded hover:bg-blue-700 font-semibold transition disabled:bg-gray-300 disabled:cursor-not-allowed"
           >
-            Sign Up
+            {isLoading ? "Creating Account..." : "Sign Up"}
           </button>
         </form>
 

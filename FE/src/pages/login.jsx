@@ -1,23 +1,45 @@
-import { useState } from "react";
-// import { Link } from "react-router-dom"; // use if routing is set up
-import { Link } from "react-router-dom";
+import { useState, useEffect } from "react";
+import { Link, useNavigate } from "react-router-dom";
+import { useDispatch, useSelector } from "react-redux";
+import { loginUser, clearError } from "../state/authSlice";
 
 function Login() {
   const [form, setForm] = useState({ email: "", password: "" });
-  const [error, setError] = useState("");
+  const dispatch = useDispatch();
+  const navigate = useNavigate();
+  const { isLoading, error, isAuthenticated } = useSelector(
+    (state) => state.auth
+  );
+
+  useEffect(() => {
+    // Clear any previous errors
+    dispatch(clearError());
+
+    // Redirect if already authenticated
+    if (isAuthenticated) {
+      navigate("/");
+    }
+  }, [isAuthenticated, navigate, dispatch]);
 
   const handleChange = (e) => {
     setForm({ ...form, [e.target.name]: e.target.value });
-    setError("");
+    if (error) {
+      dispatch(clearError());
+    }
   };
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
     if (!form.email || !form.password) {
-      setError("Please enter both email and password.");
       return;
     }
-    alert("Logged in as: " + form.email);
+
+    try {
+      await dispatch(loginUser(form)).unwrap();
+      navigate("/");
+    } catch (err) {
+      // Error is handled by Redux state
+    }
   };
 
   return (
@@ -59,12 +81,16 @@ function Login() {
           </div>
 
           {error && <div className="text-red-500 text-sm">{error}</div>}
+          {isLoading && (
+            <div className="text-blue-500 text-sm">Logging in...</div>
+          )}
 
           <button
             type="submit"
-            className="w-full bg-blue-400 text-white py-2 rounded hover:bg-blue-700 font-semibold transition"
+            disabled={isLoading}
+            className="w-full bg-blue-400 text-white py-2 rounded hover:bg-blue-700 font-semibold transition disabled:bg-gray-300 disabled:cursor-not-allowed"
           >
-            Login
+            {isLoading ? "Logging in..." : "Login"}
           </button>
         </form>
 

@@ -4,12 +4,17 @@ import {
   addMessage,
   setInputText,
   clearInputText,
+  saveMessage,
+  setCurrentHistoryId,
 } from "../state/messagesSlice";
 import { useDispatch, useSelector } from "react-redux";
 
 function Home() {
   const messages = useSelector((state) => state.messages.messages ?? []);
   const inputText = useSelector((state) => state.messages.inputText ?? "");
+  const currentHistoryId = useSelector(
+    (state) => state.messages.currentHistoryId
+  );
   const dispatch = useDispatch();
   const chatContainerRef = useRef(null);
   const textareaRef = useRef(null);
@@ -31,18 +36,20 @@ function Home() {
     }
   }, [messages]);
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
 
     const trimmed = inputText.trim();
     if (!trimmed) return;
 
+    // Create user message with unique temp ID
     const userMessage = {
-      id: Date.now(),
+      id: `temp-user-${Date.now()}`,
       role: "user",
       content: trimmed,
     };
 
+    // Add to local state immediately
     dispatch(addMessage(userMessage));
     dispatch(clearInputText());
 
@@ -51,17 +58,30 @@ function Home() {
       textareaRef.current.style.height = "auto";
     }
 
-    // Simulated AI response
-    setTimeout(() => {
-      dispatch(
-        addMessage({
-          id: Date.now() + 1,
-          role: "assistant",
-          content:
-            "This is a placeholder response. Your AI-generated summary will appear here.",
+    // Save user message to backend
+    // The backend will automatically generate and return both user and assistant messages
+    try {
+      const response = await dispatch(
+        saveMessage({
+          history_id: currentHistoryId || null,
+          role: "user",
+          content: trimmed,
         })
-      );
-    }, 500);
+      ).unwrap();
+
+      // Update currentHistoryId if this is the first message
+      const historyId =
+        response.history_id || response.user_message?.history_id;
+      if (!currentHistoryId && historyId) {
+        dispatch(setCurrentHistoryId(historyId));
+      }
+
+      // The backend returns both messages, which are automatically
+      // added to Redux state via saveMessage.fulfilled reducer
+      console.log("Messages received from backend:", response);
+    } catch (error) {
+      console.error("Error saving message:", error);
+    }
   };
 
   const handleTextareaChange = (e) => {
@@ -75,6 +95,14 @@ function Home() {
       )}px`;
     }
   };
+
+  // Debug: Log messages for rendering
+  console.log("Rendering messages:", messages);
+  console.log("Messages count:", messages.length);
+  console.log(
+    "Assistant messages:",
+    messages.filter((m) => m.role === "assistant")
+  );
 
   return (
     <div className="flex flex-col h-screen bg-white">
@@ -95,26 +123,39 @@ function Home() {
             </div>
           ) : (
             <div className="max-w-4xl mx-auto space-y-4 ">
-              {messages.map((message) => (
-                <div
-                  key={message.id}
-                  className={`flex ${
-                    message.role === "user" ? "justify-end" : "justify-start"
-                  }`}
-                >
+              {messages.map((message, index) => {
+                // Ensure message has required properties
+                const messageId = message.id || `msg-${index}`;
+                const messageContent = message.content || "";
+                const messageRole = message.role || "assistant";
+
+                console.log(`Rendering message ${index}:`, {
+                  id: messageId,
+                  role: messageRole,
+                  content: messageContent?.slice(0, 30),
+                });
+
+                return (
                   <div
-                    className={`max-w-[80%] rounded-lg px-4 py-3 ${
-                      message.role === "user"
-                        ? "bg-blue-100 text-black"
-                        : "bg-gray-100 text-gray-800"
+                    key={messageId}
+                    className={`flex ${
+                      messageRole === "user" ? "justify-end" : "justify-start"
                     }`}
                   >
-                    <div className="whitespace-pre-wrap ">
-                      {message.content}
+                    <div
+                      className={`max-w-[80%] rounded-lg px-4 py-3 ${
+                        messageRole === "user"
+                          ? "bg-blue-100 text-black"
+                          : "bg-gray-100 text-gray-800"
+                      }`}
+                    >
+                      <div className="whitespace-pre-wrap ">
+                        {messageContent}
+                      </div>
                     </div>
                   </div>
-                </div>
-              ))}
+                );
+              })}
               <div />
             </div>
           )}

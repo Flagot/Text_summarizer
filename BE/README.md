@@ -31,13 +31,22 @@ pip install -r requirements.txt
 cp .env.example .env
 ```
 
-3. Update `.env` with your MongoDB connection string:
+3. Update `.env` with your configuration:
 
 ```
 MONGODB_URL=mongodb://localhost:27017
 DATABASE_NAME=text_summarizer
 SECRET_KEY=your-secret-key-here
+GROQ_API_KEY=your-groq-api-key-here
 ```
+
+**Getting a Groq API Key:**
+
+1. Visit https://console.groq.com/
+2. Sign up or log in
+3. Navigate to API Keys section
+4. Create a new API key
+5. Copy the key and add it to your `.env` file as `GROQ_API_KEY`
 
 ### Running the Server
 

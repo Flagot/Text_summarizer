@@ -10,7 +10,7 @@ class User(BaseModel):
 
 class Message(BaseModel):
     id: Optional[str] = Field(None, alias="_id")
-    history_id: str  # PK of the history this message belongs to
+    history_id: Optional[str] = None  # PK of the history this message belongs to (optional, will be created if missing)
     role: str  # "user" or "assistant"
     content: str
     timestamp: Optional[datetime] = None

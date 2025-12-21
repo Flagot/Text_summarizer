@@ -9,3 +9,4 @@ python-jose[cryptography]==3.3.0
 PyJWT==2.8.0
 bcrypt==4.1.2
 python-multipart==0.0.6
+groq==0.4.1
