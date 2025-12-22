@@ -140,10 +140,10 @@ export const messagesAPI = {
  */
 export const historyAPI = {
   /**
-   * Get chat history
+   * Get chat history with pagination
    */
-  getHistory: async (limit = 20) => {
-    return apiRequest(`/api/history?limit=${limit}`);
+  getHistory: async (limit = 20, skip = 0) => {
+    return apiRequest(`/api/history?limit=${limit}&skip=${skip}`);
   },
 
   /**

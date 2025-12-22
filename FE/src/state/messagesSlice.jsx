@@ -28,10 +28,17 @@ export const loadMessages = createAsyncThunk(
 
 export const loadHistory = createAsyncThunk(
   "messages/loadHistory",
-  async (_, { rejectWithValue }) => {
+  async (
+    { limit = 20, skip = 0, append = false } = {},
+    { rejectWithValue }
+  ) => {
     try {
-      const response = await historyAPI.getHistory();
-      return response.history || [];
+      const response = await historyAPI.getHistory(limit, skip);
+      return {
+        history: response.history || [],
+        hasMore: response.has_more || false,
+        append: append,
+      };
     } catch (error) {
       return rejectWithValue(error.message);
     }
@@ -57,6 +64,7 @@ const initialState = {
   currentHistoryId: null, // current history ID
   isLoading: false,
   error: null,
+  hasMoreHistory: true, // whether there are more history items to load
 };
 
 const messagesSlice = createSlice({
@@ -203,19 +211,31 @@ const messagesSlice = createSlice({
       })
       .addCase(loadHistory.fulfilled, (state, action) => {
         state.isLoading = false;
-        console.log("loadHistory.fulfilled - action.payload:", action.payload);
-        console.log(
-          "loadHistory.fulfilled - payload type:",
-          typeof action.payload
-        );
-        console.log(
-          "loadHistory.fulfilled - payload is array:",
-          Array.isArray(action.payload)
-        );
-        state.history = action.payload || [];
+        const payload = action.payload;
+        console.log("loadHistory.fulfilled - action.payload:", payload);
+
+        if (payload.append && Array.isArray(payload.history)) {
+          // Append new history to existing (for pagination)
+          const existingIds = new Set(state.history.map((h) => h._id || h.id));
+          const newHistory = payload.history.filter((h) => {
+            const id = h._id || h.id;
+            return id && !existingIds.has(id);
+          });
+          state.history = [...state.history, ...newHistory];
+        } else if (Array.isArray(payload.history)) {
+          // Replace history (initial load)
+          state.history = payload.history;
+        } else {
+          // Fallback for old format
+          state.history = Array.isArray(payload) ? payload : [];
+        }
+
+        state.hasMoreHistory = payload.hasMore || false;
         console.log(
           "loadHistory.fulfilled - state.history after update:",
-          state.history
+          state.history.length,
+          "hasMore:",
+          state.hasMoreHistory
         );
       })
       .addCase(loadHistory.rejected, (state, action) => {

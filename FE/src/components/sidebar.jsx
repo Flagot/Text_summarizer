@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef } from "react";
 import { Link } from "react-router-dom";
 import { BsCheck2Square } from "react-icons/bs";
 import logo from "../assets/logo.png";
@@ -16,8 +16,15 @@ import { messagesAPI } from "../services/api";
 const Sidebar = () => {
   const messages = useSelector((state) => state.messages.messages ?? []);
   const history = useSelector((state) => state.messages.history ?? []);
+  const hasMoreHistory = useSelector(
+    (state) => state.messages.hasMoreHistory ?? true
+  );
+  const isLoadingHistory = useSelector(
+    (state) => state.messages.isLoading ?? false
+  );
   const dispatch = useDispatch();
   const [historyPreviews, setHistoryPreviews] = useState({});
+  const sidebarScrollRef = useRef(null);
 
   // Debug: Log history state
   useEffect(() => {
@@ -29,16 +36,15 @@ const Sidebar = () => {
     }
   }, [history]);
 
-  // Load history on component mount
+  // Load initial history on component mount (first 20 items)
   useEffect(() => {
     const loadHistoryData = async () => {
       try {
-        console.log("Loading history...");
-        const result = await dispatch(loadHistory()).unwrap();
+        console.log("Loading initial history...");
+        const result = await dispatch(
+          loadHistory({ limit: 20, skip: 0, append: false })
+        ).unwrap();
         console.log("History loaded successfully:", result);
-        console.log("History type:", typeof result);
-        console.log("History is array:", Array.isArray(result));
-        console.log("History length:", result?.length);
       } catch (error) {
         console.error("Error loading history:", error);
         console.error("Error details:", error.message, error.stack);
@@ -47,13 +53,51 @@ const Sidebar = () => {
     loadHistoryData();
   }, [dispatch]);
 
-  // Fetch previews for each history item
+  // Handle infinite scroll - load more when user scrolls near bottom
+  useEffect(() => {
+    const scrollContainer = sidebarScrollRef.current;
+    if (!scrollContainer) return;
+
+    const handleScroll = () => {
+      const { scrollTop, scrollHeight, clientHeight } = scrollContainer;
+      // Load more when user is within 100px of bottom
+      const isNearBottom = scrollHeight - scrollTop - clientHeight < 100;
+
+      if (isNearBottom && hasMoreHistory && !isLoadingHistory) {
+        console.log("Loading more history...", {
+          currentCount: history.length,
+        });
+        dispatch(
+          loadHistory({
+            limit: 20,
+            skip: history.length,
+            append: true,
+          })
+        ).catch((error) => {
+          console.error("Error loading more history:", error);
+        });
+      }
+    };
+
+    scrollContainer.addEventListener("scroll", handleScroll);
+    return () => {
+      scrollContainer.removeEventListener("scroll", handleScroll);
+    };
+  }, [history.length, hasMoreHistory, isLoadingHistory, dispatch]);
+
+  // Fetch previews for new history items only
   useEffect(() => {
     const fetchPreviews = async () => {
-      const previews = {};
-      for (const hist of history) {
+      // Find history items that need previews
+      const previewsToFetch = history.filter((hist) => {
         const historyId = hist._id || hist.id;
-        if (historyId && !previews[historyId]) {
+        return historyId && !historyPreviews[historyId];
+      });
+
+      // Fetch previews for new items
+      if (previewsToFetch.length > 0) {
+        const previewPromises = previewsToFetch.map(async (hist) => {
+          const historyId = hist._id || hist.id;
           try {
             // Get more messages to find the first user message
             const response = await messagesAPI.getMessages(historyId, 10);
@@ -65,24 +109,37 @@ const Sidebar = () => {
               if (firstUserMessage && firstUserMessage.content) {
                 const content = firstUserMessage.content.trim();
                 if (content) {
-                  previews[historyId] = content.slice(0, 32);
+                  return { historyId, preview: content.slice(0, 32) };
                 }
               }
             }
-            // If no preview found, leave it undefined so we can use date fallback
           } catch (error) {
             console.error("Error loading history preview:", error);
-            // Leave undefined so date fallback is used
           }
+          return null;
+        });
+
+        const results = await Promise.all(previewPromises);
+
+        // Update previews with fetched results
+        const updates = {};
+        results.forEach((result) => {
+          if (result && result.historyId) {
+            updates[result.historyId] = result.preview;
+          }
+        });
+
+        if (Object.keys(updates).length > 0) {
+          setHistoryPreviews((prev) => ({ ...prev, ...updates }));
         }
       }
-      setHistoryPreviews(previews);
     };
 
     if (history.length > 0) {
       fetchPreviews();
     }
-  }, [history]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [history]); // historyPreviews intentionally excluded to avoid infinite loop
 
   const handleClick = async () => {
     // Only save history if there are messages
@@ -98,8 +155,10 @@ const Sidebar = () => {
             })),
           })
         ).unwrap();
-        // Reload history list to show the new entry
-        await dispatch(loadHistory()).unwrap();
+        // Reload history list to show the new entry (reset to first page)
+        await dispatch(
+          loadHistory({ limit: 20, skip: 0, append: false })
+        ).unwrap();
       } catch (error) {
         console.error("Error saving history:", error);
       }
@@ -138,7 +197,10 @@ const Sidebar = () => {
         </div>
       </div>
       <h3 className="shrink-0 pb-2 font-bold">Your chat</h3>
-      <ul className="space-y-2 flex flex-col overflow-y-auto flex-1 min-h-0">
+      <ul
+        ref={sidebarScrollRef}
+        className="space-y-2 flex flex-col overflow-y-auto flex-1 min-h-0"
+      >
         {!history || history.length === 0 ? (
           <li className="text-sm text-gray-500 p-2">No chat history yet</li>
         ) : (
@@ -169,6 +231,16 @@ const Sidebar = () => {
               );
             })
             .filter(Boolean)
+        )}
+        {isLoadingHistory && history.length > 0 && (
+          <li className="text-sm text-gray-400 p-2 text-center">
+            Loading more...
+          </li>
+        )}
+        {!hasMoreHistory && history.length > 0 && (
+          <li className="text-sm text-gray-400 p-2 text-center">
+            No more history
+          </li>
         )}
       </ul>
       {/* <ul className="space-y-2 flex flex-col justify-between h-11/12">

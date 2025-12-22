@@ -38,15 +38,26 @@ async def save_chat_history(
 @router.get("/")
 async def get_chat_history(
     token_data: dict = Depends(verify_token),
-    limit: int = 20
+    limit: int = 20,
+    skip: int = 0
 ):
-    """Get user's chat history"""
+    """Get user's chat history with pagination"""
     user_id = token_data["user_id"]
     
-    cursor = history_collection.find({"user_id": user_id}).sort("created_at", -1).limit(limit)
+    # Get total count for pagination info
+    total_count = await history_collection.count_documents({"user_id": user_id})
+    
+    # Get paginated history
+    cursor = history_collection.find({"user_id": user_id}).sort("created_at", -1).skip(skip).limit(limit)
     histories = await cursor.to_list(length=limit)
     
-    return {"history": [history_helper(hist) for hist in histories]}
+    return {
+        "history": [history_helper(hist) for hist in histories],
+        "total": total_count,
+        "skip": skip,
+        "limit": limit,
+        "has_more": (skip + limit) < total_count
+    }
 
 
 @router.delete("/{history_id}")
