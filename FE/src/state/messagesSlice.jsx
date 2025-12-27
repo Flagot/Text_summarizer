@@ -1,5 +1,6 @@
 import { createSlice, createAsyncThunk } from "@reduxjs/toolkit";
 import { messagesAPI, historyAPI } from "../services/api";
+import { logout } from "./authSlice";
 
 // Async thunks
 export const saveMessage = createAsyncThunk(
@@ -266,6 +267,17 @@ const messagesSlice = createSlice({
         state.isLoading = false;
         state.error = action.payload;
       });
+
+    // Clear all messages state on logout
+    builder.addCase(logout, (state) => {
+      state.messages = [];
+      state.inputText = "";
+      state.history = [];
+      state.currentHistoryId = null;
+      state.isLoading = false;
+      state.error = null;
+      state.hasMoreHistory = true;
+    });
   },
 });
 

@@ -52,32 +52,62 @@ async def create_message(
 
     # Generate assistant message only if this is a user message
     if message.role == "user":
-        # Generate summary using Groq API
+        # Fetch conversation history for context (like ChatGPT)
+        conversation_messages = []
+        
+        # Get previous messages in this conversation (limit to last 20 messages to avoid token limits)
+        # We fetch messages before the current one to get conversation context
+        previous_messages_cursor = message_collection.find(
+            {"history_id": history_id}
+        ).sort("timestamp", 1)
+        
+        previous_messages = []
+        async for msg in previous_messages_cursor:
+            # Skip the current message we just saved (it will be added separately)
+            if str(msg["_id"]) != str(user_message_result.inserted_id):
+                previous_messages.append(msg)
+        
+        # Limit to last 20 messages to manage token usage (keep most recent context)
+        if len(previous_messages) > 20:
+            previous_messages = previous_messages[-20:]
+        
+        # Build conversation history for Groq API
+        # Start with system message
+        conversation_messages.append({
+            "role": "system",
+            "content": "You are a helpful AI assistant that provides concise and accurate summaries of text. You can also engage in conversation and answer questions. When asked to summarize text, provide clear and informative summaries. Maintain context from previous messages in the conversation and respond naturally based on the conversation history."
+        })
+        
+        # Add all previous messages to maintain conversation context
+        for prev_msg in previous_messages:
+            conversation_messages.append({
+                "role": prev_msg["role"],
+                "content": prev_msg["content"]
+            })
+        
+        # Add the current user message
+        conversation_messages.append({
+            "role": "user",
+            "content": message.content
+        })
+        
+        # Generate response using Groq API with conversation history
         try:
             if groq_client:
-                # Use Groq API to generate summary
+                # Use Groq API with full conversation history
                 chat_completion = groq_client.chat.completions.create(
-                    messages=[
-                        {
-                            "role": "system",
-                            "content": "You are a helpful assistant that provides concise and accurate summaries of text. Summarize the given text in a clear and informative way."
-                        },
-                        {
-                            "role": "user",
-                            "content": f"Please summarize the following text:\n\n{message.content}"
-                        }
-                    ],
+                    messages=conversation_messages,
                     model="llama-3.3-70b-versatile",  # Updated to current Groq model
                     temperature=0.7,
-                    max_tokens=500,
+                    max_tokens=1000,  # Increased for better responses
                 )
                 assistant_content = chat_completion.choices[0].message.content.strip()
             else:
                 # Fallback if Groq API key is not configured
-                assistant_content = f"This is a placeholder summary. Original text length: {len(message.content)} characters. Please configure GROQ_API_KEY in your .env file."
+                assistant_content = f"This is a placeholder response. Original text length: {len(message.content)} characters. Please configure GROQ_API_KEY in your .env file."
         except Exception as e:
             # Fallback on error
-            assistant_content = f"Error generating summary: {str(e)}. Please check your Groq API configuration."
+            assistant_content = f"Error generating response: {str(e)}. Please check your Groq API configuration."
         
         # Save assistant's message
         assistant_dict = {

@@ -25,6 +25,14 @@ const Sidebar = () => {
   const dispatch = useDispatch();
   const [historyPreviews, setHistoryPreviews] = useState({});
   const sidebarScrollRef = useRef(null);
+  const isLoadingMoreRef = useRef(false);
+
+  // Clear previews when history is cleared (e.g., on logout)
+  useEffect(() => {
+    if (!history || history.length === 0) {
+      setHistoryPreviews({});
+    }
+  }, [history]);
 
   // Debug: Log history state
   useEffect(() => {
@@ -58,32 +66,106 @@ const Sidebar = () => {
     const scrollContainer = sidebarScrollRef.current;
     if (!scrollContainer) return;
 
+    // Throttle function to prevent too many scroll events
+    let scrollTimeout;
     const handleScroll = () => {
-      const { scrollTop, scrollHeight, clientHeight } = scrollContainer;
-      // Load more when user is within 100px of bottom
-      const isNearBottom = scrollHeight - scrollTop - clientHeight < 100;
+      // Clear existing timeout
+      if (scrollTimeout) {
+        clearTimeout(scrollTimeout);
+      }
 
-      if (isNearBottom && hasMoreHistory && !isLoadingHistory) {
-        console.log("Loading more history...", {
-          currentCount: history.length,
+      // Throttle scroll events
+      scrollTimeout = setTimeout(() => {
+        const { scrollTop, scrollHeight, clientHeight } = scrollContainer;
+
+        // Calculate distance from bottom
+        const distanceFromBottom = scrollHeight - scrollTop - clientHeight;
+
+        // Load more when user is within 200px of bottom (more generous threshold)
+        const isNearBottom = distanceFromBottom < 200;
+
+        if (
+          isNearBottom &&
+          hasMoreHistory &&
+          !isLoadingHistory &&
+          !isLoadingMoreRef.current
+        ) {
+          isLoadingMoreRef.current = true;
+          console.log("Loading more history...", {
+            currentCount: history.length,
+            distanceFromBottom,
+            scrollTop,
+            scrollHeight,
+            clientHeight,
+          });
+
+          dispatch(
+            loadHistory({
+              limit: 20,
+              skip: history.length,
+              append: true,
+            })
+          )
+            .then(() => {
+              isLoadingMoreRef.current = false;
+            })
+            .catch((error) => {
+              console.error("Error loading more history:", error);
+              isLoadingMoreRef.current = false;
+            });
+        }
+      }, 150); // Throttle to 150ms
+    };
+
+    scrollContainer.addEventListener("scroll", handleScroll, { passive: true });
+
+    // Also check on mount and when history changes if we need to load more
+    const checkIfNeedsMore = () => {
+      const { scrollHeight, clientHeight } = scrollContainer;
+      // If content doesn't fill the container and we have more history, load more
+      if (
+        scrollHeight <= clientHeight + 50 && // Small buffer
+        hasMoreHistory &&
+        !isLoadingHistory &&
+        !isLoadingMoreRef.current &&
+        history.length > 0
+      ) {
+        console.log("Content doesn't fill container, loading more...", {
+          scrollHeight,
+          clientHeight,
+          historyLength: history.length,
         });
+        isLoadingMoreRef.current = true;
         dispatch(
           loadHistory({
             limit: 20,
             skip: history.length,
             append: true,
           })
-        ).catch((error) => {
-          console.error("Error loading more history:", error);
-        });
+        )
+          .then(() => {
+            isLoadingMoreRef.current = false;
+          })
+          .catch((error) => {
+            console.error("Error loading more history:", error);
+            isLoadingMoreRef.current = false;
+          });
       }
     };
 
-    scrollContainer.addEventListener("scroll", handleScroll);
+    // Check after a short delay to ensure DOM is ready
+    const checkTimeout = setTimeout(checkIfNeedsMore, 300);
+
     return () => {
+      if (scrollTimeout) {
+        clearTimeout(scrollTimeout);
+      }
+      if (checkTimeout) {
+        clearTimeout(checkTimeout);
+      }
       scrollContainer.removeEventListener("scroll", handleScroll);
     };
-  }, [history.length, hasMoreHistory, isLoadingHistory, dispatch]);
+  }, [history.length, hasMoreHistory, isLoadingHistory, dispatch, history]);
 
   // Fetch previews for new history items only
   useEffect(() => {
@@ -178,7 +260,7 @@ const Sidebar = () => {
 
   return (
     <div
-      className={`sticky top-0 text-blue-400 border border-gray-200 h-screen pt-3 p-2 w-64 flex flex-col`}
+      className={`sticky top-0 text-blue-400 border border-gray-200 h-screen pt-3 p-2 w-64 flex flex-col overflow-hidden`}
     >
       <div className=" flex justify-between items-center mb-4 shrink-0">
         <div>
@@ -199,7 +281,8 @@ const Sidebar = () => {
       <h3 className="shrink-0 pb-2 font-bold">Your chat</h3>
       <ul
         ref={sidebarScrollRef}
-        className="space-y-2 flex flex-col overflow-y-auto flex-1 min-h-0"
+        className="space-y-2 flex flex-col overflow-y-auto flex-1 min-h-0 scrollbar-thin scrollbar-thumb-gray-300 scrollbar-track-transparent"
+        style={{ WebkitOverflowScrolling: "touch" }}
       >
         {!history || history.length === 0 ? (
           <li className="text-sm text-gray-500 p-2">No chat history yet</li>
@@ -210,7 +293,7 @@ const Sidebar = () => {
               // Get preview from state (fetched separately)
               const preview = historyPreviews[historyId];
 
-              // Only render if we have a preview
+              // Only render items that have previews (filter out items without previews)
               if (!preview) {
                 return null;
               }
