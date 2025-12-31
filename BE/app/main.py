@@ -24,7 +24,7 @@ app = FastAPI(
 app.add_middleware(
     CORSMiddleware,
     allow_origins=[
-      "https://text-summarizer-azure.vercel.app",
+      "https://textsummarizer-production-3da7.up.railway.app",
       "https://text-summarizer-89qsl51jx-flagots-projects.vercel.app"
 
     ],
