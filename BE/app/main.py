@@ -24,9 +24,7 @@ app = FastAPI(
 app.add_middleware(
     CORSMiddleware,
     allow_origins=[
-        "http://localhost:5173",
-        "http://localhost:5174",  # Vite default port (can vary)
-        "http://localhost:3000",
+      "https://text-summarizer-azure.vercel.app",
     ],
     allow_credentials=True,
     allow_methods=["*"],
