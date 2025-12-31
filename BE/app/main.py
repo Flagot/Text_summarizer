@@ -23,7 +23,6 @@ app = FastAPI(
 # CORS middleware
 app.add_middleware(
     CORSMiddleware,
-    allow_origin_regex=r"https://.*\.vercel\.app",
     allow_origins=[
       "https://text-summarizer-azure.vercel.app",
       "https://text-summarizer-89qsl51jx-flagots-projects.vercel.app"
