@@ -21,13 +21,10 @@ app = FastAPI(
 )
 
 # CORS middleware
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[
-      "https://textsummarizer-production-3da7.up.railway.app",
-      "https://text-summarizer-89qsl51jx-flagots-projects.vercel.app"
-
-    ],
+    allow_origin_regex=r"https://.*\.vercel\.app",
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
