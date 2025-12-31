@@ -17,10 +17,8 @@ router = APIRouter(
 
 # Initialize Groq client
 GROQ_API_KEY = os.getenv("GROQ_API_KEY")
-if not GROQ_API_KEY:
-    print("Warning: GROQ_API_KEY not found in environment variables")
+groq_client = Groq(api_key=GROQ_API_KEY)
 
-groq_client = Groq(api_key=GROQ_API_KEY) if GROQ_API_KEY else None
 
 
 @router.post("/", response_model=SummarizeResponse)
