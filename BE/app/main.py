@@ -25,6 +25,8 @@ app.add_middleware(
     CORSMiddleware,
     allow_origins=[
       "https://text-summarizer-azure.vercel.app",
+      "https://text-summarizer-89qsl51jx-flagots-projects.vercel.app"
+
     ],
     allow_credentials=True,
     allow_methods=["*"],
